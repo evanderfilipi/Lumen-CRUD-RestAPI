@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\UserModel;
 use Illuminate\Http\Request;
+use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
@@ -19,25 +21,59 @@ class UserController extends Controller
 
     public function index(){
         try {
-            $users = UserModel::get();
-            $get['Data'] = $users;
+            $key = 'data-user';
+            $getCaches = getCache($key);
+
+            if ($getCaches != null) {
+                return responses($getCaches, null);
+            }
+
+            $users = UserModel::select([
+                'id',
+                'nama',
+                'tgl_lahir',
+                'alamat',
+                'email',
+                'created_at',
+                'updated_at'])
+                ->where('deleted_at', null)
+                ->get();
+                        
+            setCache($key, $users);
+            // $users['message'] = 'Success get data!';
+            return responses($users, null);
         }
-        catch(\Exception $e) {
-            $get['Message'] = 'Gagal menampilkan data!';
-            $get['Detail'] = $e;
+        catch(QueryException $e) {
+            return errorQuery($e);
         }
 
-        return response()->json($get);
+        return responses($users, null);
     }
 
     public function getUser($id){
         try {
-            $data = UserModel::where('id', $id)->get();
-            $get['Data'] = $data;
+            $key = 'data-user-'.$id;
+            $getCaches = getCache($key);
+
+            if ($getCaches != null) {
+                return responses($getCaches, 200);
+            }
+
+            $users = UserModel::select([
+                'id',
+                'nama',
+                'tgl_lahir',
+                'alamat',
+                'email',
+                'created_at',
+                'updated_at'])->where('id', $id)->firstOrFail();
+
+            setCache($key, $users);
+            $users['message'] = 'Success get data!';
+            return responses($users, null);
         }
-        catch(\Exception $e) {
-            $get['Message'] = 'Gagal menampilkan data!';
-            $get['Detail'] = $e;
+        catch(QueryException $e) {
+            return errorQuery($e);
         }
         
         return response()->json($get);
@@ -45,19 +81,21 @@ class UserController extends Controller
 
     public function store(Request $req){
         try {
+            $key = 'data-user';
+
             $data = new UserModel();
-            $data->nama = $req->input('nama');
-            $data->tgl_lahir = $req->input('tanggal_lahir');
-            $data->alamat = $req->input('alamat');
-            $data->email = $req->input('email');
+            $data->nama = $req->nama;
+            $data->tgl_lahir = $req->tanggal_lahir;
+            $data->alamat = $req->alamat;
+            $data->email = $req->email;
             $data->save();
-            
-            $get['Message'] = 'Berhasil menambahkan data!';
-            $get['Data'] = $data;
+
+            $data->message = 'Data berhasil disimpan!';    
+            deleteCache($key);
+            return responses($data, null);
         } 
-        catch(\Exception $e) {
-            $get['Message'] = 'Gagal menambahkan data!';
-            $get['Detail'] = $e;
+        catch(QueryException $e) {
+            return errorQuery($e);
         }
 
         return response()->json($get);
@@ -65,33 +103,42 @@ class UserController extends Controller
 
     public function update(Request $req, $id){
         try {
-            $data = UserModel::where('id', $id)->first();
-            $data->nama = $req->input('nama');
-            $data->tgl_lahir = $req->input('tanggal_lahir');
-            $data->alamat = $req->input('alamat');
-            $data->email = $req->input('email');
-            $data->save();
+            $key = 'data-user-'.$id;
+            $key2 = 'data-user';
+            $data = UserModel::where('id', $id)->firstOrFail();
+            $data->updated_at = date("Y-m-d H:i:s");
+            $inputdata = $req->all();
+            $data->fill($inputdata)->save();
             
-            $get['Message'] = 'Berhasil mengupdate data!';
-            $get['Data'] = $data;
+            $data->message = 'Data berhasil diupdate!';
+            deleteCache($key);
+            deleteCache($key2);
+            return responses($data, 200);
         }
-        catch(\Exception $e) {
-            $get['Message'] = 'Gagal mengupdate data!';
-            $get['Detail'] = $e;
+        catch(QueryException $e) {
+            return errorQuery($e);
         }
 
         return response()->json($get);
     }
 
-    public function destroy($id){
+    public function destroy(Request $req, $id){
         try {
-            $data = UserModel::where('id', $id)->first();
-            $data->delete();
-            $get['Message'] = 'Berhasil menghapus data!';
+            $key = 'data-user-'.$id;
+            $key2 = 'data-user';
+            $data = UserModel::where('id', $id)->firstOrFail();
+            $data->updated_at = date("Y-m-d H:i:s");
+            $data->deleted_at = date("Y-m-d H:i:s");
+            $inputdata = $req->all();
+            $data->fill($inputdata)->save();
+            
+            $data->message = 'Data berhasil dihapus!';
+            deleteCache($key);
+            deleteCache($key2);
+            return responses($data, 200);
         }
-        catch(\Exception $e) {
-            $get['Message'] = 'Gagal menghapus data!';
-            $get['Detail'] = $e;
+        catch(QueryException $e) {
+            return errorQuery($e);
         }
 
         return response()->json($get);
